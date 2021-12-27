@@ -32,6 +32,7 @@ libraryDependencies ++= Seq(
   "io.circe" %% "circe-generic" % circeVersion,
   // Optional for string interpolation to JSON model
   "io.circe" %% "circe-literal" % circeVersion,
+  "io.circe" %% "circe-config" % circeConfigVersion
 )
 
 // fs2
