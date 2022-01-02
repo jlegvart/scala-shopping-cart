@@ -1,4 +1,4 @@
-package com.playground.config
+package com.playground.shoppingcart.config
 
 import cats.effect.kernel.Sync
 import io.circe._
