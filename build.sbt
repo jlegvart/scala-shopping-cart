@@ -24,6 +24,19 @@ libraryDependencies += "org.typelevel" %% "log4cats-slf4j" % log4cats
 libraryDependencies += "org.typelevel" %% "cats-core" % catsVersion withSources () withJavadoc ()
 libraryDependencies += "org.typelevel" %% "cats-effect" % catsEffectVersion withSources () withJavadoc ()
 
+// doobie
+libraryDependencies ++= Seq(
+  // Start with this one
+  "org.tpolecat" %% "doobie-core" % doobieVersion,
+
+  // And add any of these as needed
+  "org.tpolecat" %% "doobie-h2" % doobieVersion,
+  "org.tpolecat" %% "doobie-hikari" % doobieVersion,
+  "org.tpolecat" %% "doobie-postgres" % doobieVersion,
+  "org.tpolecat" %% "doobie-specs2" % doobieVersion % "test", // Specs2 support for typechecking statements.
+  "org.tpolecat" %% "doobie-scalatest" % doobieVersion % "test", // ScalaTest support for typechecking statements.
+)
+
 // circe
 libraryDependencies ++= Seq(
   "io.circe" %% "circe-generic" % circeVersion,
@@ -32,7 +45,7 @@ libraryDependencies ++= Seq(
   "io.circe" %% "circe-generic" % circeVersion,
   // Optional for string interpolation to JSON model
   "io.circe" %% "circe-literal" % circeVersion,
-  "io.circe" %% "circe-config" % circeConfigVersion
+  "io.circe" %% "circe-config" % circeConfigVersion,
 )
 
 // fs2
@@ -44,15 +57,6 @@ libraryDependencies ++= Seq(
   "org.http4s" %% "http4s-dsl" % http4sVersion,
   "org.http4s" %% "http4s-blaze-server" % http4sVersion,
   "org.http4s" %% "http4s-blaze-client" % http4sVersion,
-)
-
-// doobie
-libraryDependencies ++= Seq(
-  "org.tpolecat" %% "doobie-core" % doobieVersion,
-  "org.tpolecat" %% "doobie-hikari" % doobieVersion, // HikariCP transactor.
-  "org.tpolecat" %% "doobie-postgres" % doobieVersion, // Postgres driver 42.2.23 + type mappings.
-  "org.tpolecat" %% "doobie-specs2" % doobieVersion % "test", // Specs2 support for typechecking statements.
-  "org.tpolecat" %% "doobie-scalatest" % doobieVersion % "test", // ScalaTest support for typechecking statements.
 )
 
 // flyway
