@@ -16,7 +16,9 @@ lazy val doobieVersion = "1.0.0-RC1"
 lazy val flywayVersion = "8.3.0"
 lazy val circeVersion = "0.15.0-M1"
 lazy val circeConfigVersion = "0.8.0"
+lazy val tsecVersion = "0.4.0"
 
+// logback
 libraryDependencies += "ch.qos.logback" % "logback-classic" % logbackVersion
 libraryDependencies += "org.typelevel" %% "log4cats-slf4j" % log4cats
 
@@ -61,3 +63,17 @@ libraryDependencies ++= Seq(
 
 // flyway
 libraryDependencies += "org.flywaydb" % "flyway-core" % flywayVersion
+
+// tsec
+libraryDependencies ++= Seq(
+  "io.github.jmcardon" %% "tsec-common" % tsecVersion,
+  "io.github.jmcardon" %% "tsec-password" % tsecVersion,
+  "io.github.jmcardon" %% "tsec-cipher-jca" % tsecVersion,
+  "io.github.jmcardon" %% "tsec-cipher-bouncy" % tsecVersion,
+  "io.github.jmcardon" %% "tsec-mac" % tsecVersion,
+  "io.github.jmcardon" %% "tsec-signatures" % tsecVersion,
+  "io.github.jmcardon" %% "tsec-hash-jca" % tsecVersion,
+  "io.github.jmcardon" %% "tsec-hash-bouncy" % tsecVersion,
+  "io.github.jmcardon" %% "tsec-jwt-mac" % tsecVersion,
+  "io.github.jmcardon" %% "tsec-jwt-sig" % tsecVersion
+)
