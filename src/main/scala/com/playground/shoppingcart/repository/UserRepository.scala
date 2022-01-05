@@ -19,7 +19,7 @@ final case class UserRepository[F[_]: MonadCancelThrow](xa: Transactor[F]) {
   def insertUser(user: User): F[Int] =
     sql"INSERT INTO users (username, password, role) VALUES  (${user.username}, ${user.password}, ${user.role})"
       .update
-      .run
+      .withUniqueGeneratedKeys[Int]("id")
       .transact(xa)
 
 }
