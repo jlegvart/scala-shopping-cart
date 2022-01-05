@@ -14,7 +14,7 @@ import org.http4s.dsl.io._
 import tsec.passwordhashers._
 import tsec.passwordhashers.jca._
 import com.playground.shoppingcart.domain.user.{Customer, User, UserService}
-import com.playground.shoppingcart.domain.auth.RegisterRequest
+import com.playground.shoppingcart.domain.auth.AuthRequest.{LoginRequest, RegisterRequest}
 
 class AuthEndpoint[F[_]: Async](userService: UserService[F]) extends Http4sDsl[F] {
 
