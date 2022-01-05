@@ -1,6 +1,5 @@
 package com.playground.shoppingcart.endpoint
 
-import org.http4s.HttpRoutes
 import cats.effect._
 import cats.syntax.all._
 import cats.data._
@@ -12,10 +11,10 @@ import org.http4s.implicits._
 import org.http4s._
 import org.http4s.circe._
 import org.http4s.dsl.io._
-import com.playground.shoppingcart.domain.user.UserService
+import tsec.passwordhashers._
+import tsec.passwordhashers.jca._
+import com.playground.shoppingcart.domain.user.{Customer, User, UserService}
 import com.playground.shoppingcart.domain.auth.RegisterRequest
-import com.playground.shoppingcart.domain.user.User
-import com.playground.shoppingcart.domain.user.Customer
 
 class AuthEndpoint[F[_]: Async](userService: UserService[F]) extends Http4sDsl[F] {
 
@@ -30,11 +29,12 @@ class AuthEndpoint[F[_]: Async](userService: UserService[F]) extends Http4sDsl[F
       for {
         reg <- req.as[RegisterRequest]
         user <- userService.getUser(reg.username)
+        pass <- BCrypt.hashpw[F](reg.password.getBytes())
         resp <-
           user match {
             case None =>
               userService
-                .createUser(User(None, reg.username, reg.password, Customer))
+                .createUser(User(None, reg.username, pass, Customer))
                 .flatMap(_ => Created())
             case Some(user) => BadRequest("User already exists")
           }
