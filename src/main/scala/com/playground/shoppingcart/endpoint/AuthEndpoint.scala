@@ -1,27 +1,67 @@
 package com.playground.shoppingcart.endpoint
 
+import cats.data._
 import cats.effect._
 import cats.syntax.all._
-import cats.data._
+import com.playground.shoppingcart.domain.auth.AuthRequest.LoginRequest
+import com.playground.shoppingcart.domain.auth.AuthRequest.RegisterRequest
+import com.playground.shoppingcart.domain.user.Customer
+import com.playground.shoppingcart.domain.user.User
+import com.playground.shoppingcart.domain.user.UserService
+import com.playground.shoppingcart.domain.validation.UserAuthenticationError
 import io.circe._
 import io.circe.generic.auto._
+import io.circe.generic.semiauto._
 import io.circe.syntax._
-import org.http4s.dsl.Http4sDsl
-import org.http4s.implicits._
 import org.http4s._
 import org.http4s.circe._
+import org.http4s.dsl.Http4sDsl
 import org.http4s.dsl.io._
+import org.http4s.implicits._
+import tsec.jws.mac._
+import tsec.jwt._
+import tsec.mac.jca.HMACSHA256
+import tsec.mac.jca.MacSigningKey
 import tsec.passwordhashers._
 import tsec.passwordhashers.jca._
-import com.playground.shoppingcart.domain.user.{Customer, User, UserService}
-import com.playground.shoppingcart.domain.auth.AuthRequest.{LoginRequest, RegisterRequest}
 
-class AuthEndpoint[F[_]: Async](userService: UserService[F]) extends Http4sDsl[F] {
+import scala.concurrent.duration._
+import tsec.common.Verified
+import tsec.common.VerificationFailed
+
+class AuthEndpoint[F[_]: Async](userService: UserService[F], key: MacSigningKey[HMACSHA256])
+  extends Http4sDsl[F] {
 
   implicit val userDecoder = jsonOf[F, RegisterRequest]
+  implicit val logiDecoder = jsonOf[F, LoginRequest]
 
   private def loginEndpoint: HttpRoutes[F] = HttpRoutes.of[F] { case req @ POST -> Root / "login" =>
-    Ok("login")
+    val action =
+      for {
+        loginReq <- EitherT.liftF(req.as[LoginRequest])
+        user <- EitherT.fromOptionF(
+          userService.getUser(loginReq.username),
+          UserAuthenticationError(),
+        )
+        check <- EitherT.liftF(
+          BCrypt.checkpw[F](loginReq.password.getBytes(), PasswordHash(user.password))
+        )
+        isVerified <-
+          if (check == Verified)
+            EitherT.rightT[F, UserAuthenticationError](user)
+          else
+            EitherT.leftT[F, User](UserAuthenticationError())
+      } yield isVerified
+
+    action.value.flatMap {
+      case Left(err) => BadRequest("Authentication error")
+      case Right(user) =>
+        for {
+          claims <- JWTClaims.withDuration[F](expiration = Some(10.minutes))
+          jwt <- JWTMac.buildToString[F, HMACSHA256](claims, key)
+          resp <- Ok(jwt)
+        } yield resp
+    }
   }
 
   private def registerEndpoint: HttpRoutes[F] = HttpRoutes.of[F] {
@@ -45,6 +85,6 @@ class AuthEndpoint[F[_]: Async](userService: UserService[F]) extends Http4sDsl[F
 }
 
 object AuthEndpoint {
-  def endpoints[F[_]: Async](userService: UserService[F]) =
-    new AuthEndpoint[F](userService).endpoints
+  def endpoints[F[_]: Async](userService: UserService[F], key: MacSigningKey[HMACSHA256]) =
+    new AuthEndpoint[F](userService, key).endpoints
 }
