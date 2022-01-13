@@ -5,6 +5,7 @@ import cats.effect._
 import cats.syntax.all._
 import com.playground.shoppingcart.domain.auth.AuthRequest.LoginRequest
 import com.playground.shoppingcart.domain.auth.AuthRequest.RegisterRequest
+import com.playground.shoppingcart.domain.auth.JWTClaim
 import com.playground.shoppingcart.domain.user.Customer
 import com.playground.shoppingcart.domain.user.User
 import com.playground.shoppingcart.domain.user.UserService
@@ -18,6 +19,8 @@ import org.http4s.circe._
 import org.http4s.dsl.Http4sDsl
 import org.http4s.dsl.io._
 import org.http4s.implicits._
+import tsec.common.VerificationFailed
+import tsec.common.Verified
 import tsec.jws.mac._
 import tsec.jwt._
 import tsec.mac.jca.HMACSHA256
@@ -26,8 +29,6 @@ import tsec.passwordhashers._
 import tsec.passwordhashers.jca._
 
 import scala.concurrent.duration._
-import tsec.common.Verified
-import tsec.common.VerificationFailed
 
 class AuthEndpoint[F[_]: Async](userService: UserService[F], key: MacSigningKey[HMACSHA256])
   extends Http4sDsl[F] {
@@ -36,7 +37,7 @@ class AuthEndpoint[F[_]: Async](userService: UserService[F], key: MacSigningKey[
   implicit val logiDecoder = jsonOf[F, LoginRequest]
 
   private def loginEndpoint: HttpRoutes[F] = HttpRoutes.of[F] { case req @ POST -> Root / "login" =>
-    val action =
+    val userVerification =
       for {
         loginReq <- EitherT.liftF(req.as[LoginRequest])
         user <- EitherT.fromOptionF(
@@ -53,12 +54,16 @@ class AuthEndpoint[F[_]: Async](userService: UserService[F], key: MacSigningKey[
             EitherT.leftT[F, User](UserAuthenticationError())
       } yield isVerified
 
-    action.value.flatMap {
-      case Left(err) => BadRequest("Authentication error")
+    userVerification.value.flatMap {
+      case Left(err) => Response(status = Status.Unauthorized).pure
       case Right(user) =>
         for {
-          claims <- JWTClaims.withDuration[F](expiration = Some(10.minutes))
-          jwt <- JWTMac.buildToString[F, HMACSHA256](claims, key)
+          claim <- JWTClaim(user.id.get, user.username, user.role.name).pure[F]
+          claims <- JWTClaims.withDuration[F](
+            customFields = Seq("user" -> claim.asJson),
+            expiration = Some(10.minutes),
+          )
+          jwt  <- JWTMac.buildToString[F, HMACSHA256](claims, key)
           resp <- Ok(jwt)
         } yield resp
     }
@@ -67,7 +72,7 @@ class AuthEndpoint[F[_]: Async](userService: UserService[F], key: MacSigningKey[
   private def registerEndpoint: HttpRoutes[F] = HttpRoutes.of[F] {
     case req @ POST -> Root / "register" =>
       for {
-        reg <- req.as[RegisterRequest]
+        reg  <- req.as[RegisterRequest]
         user <- userService.getUser(reg.username)
         pass <- BCrypt.hashpw[F](reg.password.getBytes())
         resp <-
