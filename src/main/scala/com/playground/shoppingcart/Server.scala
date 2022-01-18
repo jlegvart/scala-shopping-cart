@@ -5,10 +5,13 @@ import com.playground.shoppingcart.config.ApplicationConfig
 import com.playground.shoppingcart.config.DatabaseConfig
 import com.playground.shoppingcart.domain.user.UserService
 import com.playground.shoppingcart.domain.company.CompanyService
+import com.playground.shoppingcart.domain.category.CategoryService
 import com.playground.shoppingcart.endpoint.AuthEndpoint
 import com.playground.shoppingcart.endpoint.CompanyEndpoint
+import com.playground.shoppingcart.endpoint.CategoryEndpoint
 import com.playground.shoppingcart.repository.UserRepository
 import com.playground.shoppingcart.repository.CompanyRepository
+import com.playground.shoppingcart.repository.CategoryRepository
 import doobie.hikari.HikariTransactor
 import doobie.util.ExecutionContexts
 import io.circe.config.parser
@@ -32,14 +35,17 @@ object Server extends IOApp {
       transactor <- DatabaseConfig.transactor(config.db)
       _          <- Resource.eval(DatabaseConfig.initDB[F](config.db))
       key        <- Resource.liftK(HMACSHA256.generateKey[F])
-      userRepository    = new UserRepository[F](transactor)
-      companyRepository = new CompanyRepository[F](transactor)
-      userService       = new UserService[F](userRepository)
-      companyService    = new CompanyService[F](companyRepository)
+      userRepository     = new UserRepository[F](transactor)
+      companyRepository  = new CompanyRepository[F](transactor)
+      categoryRepository = new CategoryRepository[F](transactor)
+      userService        = new UserService[F](userRepository)
+      companyService     = new CompanyService[F](companyRepository)
+      categoryService    = new CategoryService[F](categoryRepository)
       httpApp =
         Router(
-          "/"          -> AuthEndpoint.endpoints(userService, key),
-          "/companies" -> CompanyEndpoint.endpoints[F](companyService),
+          "/"           -> AuthEndpoint.endpoints(userService, key),
+          "/companies"  -> CompanyEndpoint.endpoints[F](companyService),
+          "/categories" -> CategoryEndpoint.endpoints[F](categoryService),
         ).orNotFound
       server <-
         BlazeServerBuilder[F](global)
