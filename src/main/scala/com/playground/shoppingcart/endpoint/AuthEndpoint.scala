@@ -12,7 +12,6 @@ import com.playground.shoppingcart.domain.user.UserService
 import com.playground.shoppingcart.domain.validation.UserAuthenticationError
 import io.circe._
 import io.circe.generic.auto._
-import io.circe.generic.semiauto._
 import io.circe.syntax._
 import org.http4s._
 import org.http4s.circe._
