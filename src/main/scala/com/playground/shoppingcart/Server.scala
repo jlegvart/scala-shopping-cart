@@ -3,15 +3,18 @@ package com.playground.shoppingcart
 import cats.effect._
 import com.playground.shoppingcart.config.ApplicationConfig
 import com.playground.shoppingcart.config.DatabaseConfig
-import com.playground.shoppingcart.domain.user.UserService
-import com.playground.shoppingcart.domain.company.CompanyService
 import com.playground.shoppingcart.domain.category.CategoryService
+import com.playground.shoppingcart.domain.company.CompanyService
+import com.playground.shoppingcart.domain.item.ItemService
+import com.playground.shoppingcart.domain.user.UserService
 import com.playground.shoppingcart.endpoint.AuthEndpoint
-import com.playground.shoppingcart.endpoint.CompanyEndpoint
 import com.playground.shoppingcart.endpoint.CategoryEndpoint
-import com.playground.shoppingcart.repository.UserRepository
-import com.playground.shoppingcart.repository.CompanyRepository
+import com.playground.shoppingcart.endpoint.CompanyEndpoint
+import com.playground.shoppingcart.endpoint.ItemEndpoint
 import com.playground.shoppingcart.repository.CategoryRepository
+import com.playground.shoppingcart.repository.CompanyRepository
+import com.playground.shoppingcart.repository.ItemRepository
+import com.playground.shoppingcart.repository.UserRepository
 import doobie.hikari.HikariTransactor
 import doobie.util.ExecutionContexts
 import io.circe.config.parser
@@ -38,14 +41,17 @@ object Server extends IOApp {
       userRepository     = new UserRepository[F](transactor)
       companyRepository  = new CompanyRepository[F](transactor)
       categoryRepository = new CategoryRepository[F](transactor)
+      itemRepository     = new ItemRepository[F](transactor)
       userService        = new UserService[F](userRepository)
       companyService     = new CompanyService[F](companyRepository)
       categoryService    = new CategoryService[F](categoryRepository)
+      itemService        = new ItemService[F](itemRepository)
       httpApp =
         Router(
           "/"           -> AuthEndpoint.endpoints(userService, key),
           "/companies"  -> CompanyEndpoint.endpoints[F](companyService),
           "/categories" -> CategoryEndpoint.endpoints[F](categoryService),
+          "/items"      -> ItemEndpoint.endpoints[F](itemService),
         ).orNotFound
       server <-
         BlazeServerBuilder[F](global)
