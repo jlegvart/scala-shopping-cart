@@ -3,14 +3,18 @@ package com.playground.shoppingcart
 import cats.effect._
 import com.playground.shoppingcart.config.ApplicationConfig
 import com.playground.shoppingcart.config.DatabaseConfig
+import com.playground.shoppingcart.domain.cart.Cart
+import com.playground.shoppingcart.domain.cart.CartService
 import com.playground.shoppingcart.domain.category.CategoryService
 import com.playground.shoppingcart.domain.company.CompanyService
 import com.playground.shoppingcart.domain.item.ItemService
 import com.playground.shoppingcart.domain.user.UserService
 import com.playground.shoppingcart.endpoint.AuthEndpoint
+import com.playground.shoppingcart.endpoint.CartEndpoint
 import com.playground.shoppingcart.endpoint.CategoryEndpoint
 import com.playground.shoppingcart.endpoint.CompanyEndpoint
 import com.playground.shoppingcart.endpoint.ItemEndpoint
+import com.playground.shoppingcart.repository.CartRepository
 import com.playground.shoppingcart.repository.CategoryRepository
 import com.playground.shoppingcart.repository.CompanyRepository
 import com.playground.shoppingcart.repository.ItemRepository
@@ -38,20 +42,24 @@ object Server extends IOApp {
       transactor <- DatabaseConfig.transactor(config.db)
       _          <- Resource.eval(DatabaseConfig.initDB[F](config.db))
       key        <- Resource.liftK(HMACSHA256.generateKey[F])
+      store      <- Resource.liftK(Ref[F].of(Map.empty[Int, Cart]))
       userRepository     = new UserRepository[F](transactor)
       companyRepository  = new CompanyRepository[F](transactor)
       categoryRepository = new CategoryRepository[F](transactor)
       itemRepository     = new ItemRepository[F](transactor)
+      cartRepository     = new CartRepository[F](store)
       userService        = new UserService[F](userRepository)
       companyService     = new CompanyService[F](companyRepository)
       categoryService    = new CategoryService[F](categoryRepository)
       itemService        = new ItemService[F](itemRepository)
+      cartService        = new CartService[F](cartRepository)
       httpApp =
         Router(
           "/"           -> AuthEndpoint.endpoints(userService, key),
           "/companies"  -> CompanyEndpoint.endpoints[F](companyService),
           "/categories" -> CategoryEndpoint.endpoints[F](categoryService),
           "/items"      -> ItemEndpoint.endpoints[F](itemService),
+          "/cart"       -> CartEndpoint.endpoints[F](cartService),
         ).orNotFound
       server <-
         BlazeServerBuilder[F](global)
