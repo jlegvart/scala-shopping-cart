@@ -36,7 +36,7 @@ import scala.concurrent.ExecutionContext.global
 
 object Server extends IOApp {
 
-  def createServer[F[_]: Async]: Resource[F, Server] =
+  def createServer[F[_]: Async: std.Console]: Resource[F, Server] =
     for {
       config     <- Resource.eval(ApplicationConfig.loadConfig[F]())
       transactor <- DatabaseConfig.transactor(config.db)
@@ -59,7 +59,7 @@ object Server extends IOApp {
           "/companies"  -> CompanyEndpoint.endpoints[F](companyService),
           "/categories" -> CategoryEndpoint.endpoints[F](categoryService),
           "/items"      -> ItemEndpoint.endpoints[F](itemService),
-          "/cart"       -> CartEndpoint.endpoints[F](cartService),
+          "/cart"       -> CartEndpoint.endpoints[F](cartService, key),
         ).orNotFound
       server <-
         BlazeServerBuilder[F](global)
