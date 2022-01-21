@@ -18,11 +18,6 @@ lazy val circeVersion       = "0.15.0-M1"
 lazy val circeConfigVersion = "0.8.0"
 lazy val tsecVersion        = "0.4.0"
 
-excludeDependencies ++= Seq(
-  "org.http4s" %% "http4s-dsl",
-  "org.http4s" %% "http4s-server",
-)
-
 // logback
 libraryDependencies += "ch.qos.logback" % "logback-classic" % logbackVersion
 libraryDependencies += "org.typelevel" %% "log4cats-slf4j"  % log4cats
@@ -83,5 +78,5 @@ libraryDependencies ++= Seq(
   "io.github.jmcardon" %% "tsec-hash-bouncy"   % tsecVersion,
   "io.github.jmcardon" %% "tsec-jwt-mac"       % tsecVersion,
   "io.github.jmcardon" %% "tsec-jwt-sig"       % tsecVersion,
-  "io.github.jmcardon" %% "tsec-http4s"        % tsecVersion,
+  "io.github.jmcardon" %% "tsec-http4s"        % tsecVersion excludeAll(ExclusionRule(organization = "org.http4s")),
 )
