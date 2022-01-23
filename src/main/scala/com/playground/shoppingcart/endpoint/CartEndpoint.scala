@@ -15,7 +15,7 @@ import com.playground.shoppingcart.domain.user.User
 import com.playground.shoppingcart.domain.validation.UserAuthenticationError
 import io.circe._
 import io.circe.syntax._
-import io.circe.generic.semiauto._
+import io.circe.generic.auto
 import org.http4s.HttpRoutes
 import org.http4s._
 import org.http4s.circe._
@@ -29,22 +29,34 @@ import tsec.jws.mac.JWTMac
 import tsec.mac.jca.HMACSHA256
 import tsec.mac.jca.MacSigningKey
 import com.playground.shoppingcart.domain.cart.Cart
+import com.playground.shoppingcart.domain.cart.CartItem
+import org.http4s.circe.CirceEntityDecoder._
 
 class CartEndpoint[F[_]: Async: std.Console](
   cartService: CartService[F],
   key: MacSigningKey[HMACSHA256],
 ) extends Http4sDsl[F] {
 
-  def getUserCart(): HttpRoutes[F] = HttpRoutes.of[F] { case request @ GET -> Root =>
-    val user = authUser(request)
-
-    user.value.flatMap {
+  def getUserCart: HttpRoutes[F] = HttpRoutes.of[F] { case request @ GET -> Root =>
+    authUser(request).value.flatMap {
       case Left(value) => Response.apply(status = Status.Unauthorized).pure[F]
       case Right(user) =>
         cartService.getUserCart(user.id.get).flatMap {
-          case None       => Ok(Cart.empty(user.id.get).asJson)
+          case None       => Ok(Cart.empty.asJson)
           case Some(cart) => Ok(cart.asJson)
         }
+    }
+  }
+
+  def createUserCart: HttpRoutes[F] = HttpRoutes.of[F] { case request @ POST -> Root =>
+    authUser(request).value.flatMap {
+      case Left(value) => Response.apply(status = Status.Unauthorized).pure[F]
+      case Right(user) =>
+        for {
+          reqCart <- request.as[Cart]
+          _       <- cartService.updateCart(user.id.get, reqCart)
+          resp    <- Ok()
+        } yield resp
     }
   }
 
@@ -90,7 +102,7 @@ class CartEndpoint[F[_]: Async: std.Console](
         claims => User(Some(claims.userId), claims.username, "", Role.toRole(claims.role)).asRight,
       )
 
-  private def endpoints: HttpRoutes[F] = getUserCart
+  private def endpoints: HttpRoutes[F] = getUserCart <+> createUserCart
 
 }
 

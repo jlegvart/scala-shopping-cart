@@ -6,7 +6,7 @@ import io.circe._
 import io.circe.syntax._
 import io.circe.generic.semiauto._
 
-final case class Cart(userId: Int, items: List[CartItem])
+final case class Cart(items: List[CartItem])
 final case class CartItem(itemId: Int, itemName: String, quantity: Int)
 
 object Cart {
@@ -17,6 +17,6 @@ object Cart {
   implicit val cartItemEncoder: Encoder[CartItem] = deriveEncoder[CartItem]
   implicit val cartItemDecoder: Decoder[CartItem] = deriveDecoder[CartItem]
 
-  def empty(userId: Int): Cart = Cart(userId, List.empty)
+  def empty: Cart = Cart(List.empty)
 
 }
