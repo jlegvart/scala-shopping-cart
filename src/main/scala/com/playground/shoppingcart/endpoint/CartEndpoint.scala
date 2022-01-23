@@ -31,6 +31,7 @@ import tsec.mac.jca.MacSigningKey
 import com.playground.shoppingcart.domain.cart.Cart
 import com.playground.shoppingcart.domain.cart.CartItem
 import org.http4s.circe.CirceEntityDecoder._
+import com.playground.shoppingcart.domain.item.Item
 
 class CartEndpoint[F[_]: Async: std.Console](
   cartService: CartService[F],
@@ -39,7 +40,7 @@ class CartEndpoint[F[_]: Async: std.Console](
 
   def getUserCart: HttpRoutes[F] = HttpRoutes.of[F] { case request @ GET -> Root =>
     authUser(request).value.flatMap {
-      case Left(value) => Response.apply(status = Status.Unauthorized).pure[F]
+      case Left(value) => Response[F](status = Status.Unauthorized).pure[F]
       case Right(user) =>
         cartService.getUserCart(user.id.get).flatMap {
           case None       => Ok(Cart.empty.asJson)
@@ -48,16 +49,18 @@ class CartEndpoint[F[_]: Async: std.Console](
     }
   }
 
-  def createUserCart: HttpRoutes[F] = HttpRoutes.of[F] { case request @ POST -> Root =>
-    authUser(request).value.flatMap {
-      case Left(value) => Response.apply(status = Status.Unauthorized).pure[F]
-      case Right(user) =>
-        for {
-          reqCart <- request.as[Cart]
-          _       <- cartService.updateCart(user.id.get, reqCart)
-          resp    <- Ok()
-        } yield resp
-    }
+  def addToCart: HttpRoutes[F] = HttpRoutes.of[F] { case request @ POST -> Root =>
+    authUser(request)
+      .value
+      .flatMap {
+        case Left(value) => Response[F](status = Status.Unauthorized).pure[F]
+        case Right(user) =>
+          for {
+            reqCart <- request.as[Cart]
+            _       <- cartService.updateCart(user.id.get, reqCart)
+            resp    <- Ok()
+          } yield resp
+      }
   }
 
   private def authUser(request: Request[F]): EitherT[F, UserAuthenticationError, User] =
@@ -102,7 +105,7 @@ class CartEndpoint[F[_]: Async: std.Console](
         claims => User(Some(claims.userId), claims.username, "", Role.toRole(claims.role)).asRight,
       )
 
-  private def endpoints: HttpRoutes[F] = getUserCart <+> createUserCart
+  private def endpoints: HttpRoutes[F] = getUserCart <+> addToCart
 
 }
 
