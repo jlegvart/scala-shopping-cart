@@ -41,7 +41,7 @@ class AuthEndpoint[F[_]: Async](userService: UserService[F], key: MacSigningKey[
         loginReq <- EitherT.liftF(req.as[LoginRequest])
         user <- EitherT.fromOptionF(
           userService.getUser(loginReq.username),
-          UserAuthenticationError(),
+          UserAuthenticationError(""),
         )
         check <- EitherT.liftF(
           BCrypt.checkpw[F](loginReq.password.getBytes(), PasswordHash(user.password))
@@ -50,7 +50,7 @@ class AuthEndpoint[F[_]: Async](userService: UserService[F], key: MacSigningKey[
           if (check == Verified)
             EitherT.rightT[F, UserAuthenticationError](user)
           else
-            EitherT.leftT[F, User](UserAuthenticationError())
+            EitherT.leftT[F, User](UserAuthenticationError(""))
       } yield isVerified
 
     userVerification.value.flatMap {

@@ -5,7 +5,7 @@ import io.circe._
 import io.circe.syntax._
 import io.circe.generic.semiauto._
 
-case class JWTClaim(userId: Long, username: String, role: String)
+case class JWTClaim(userId: Int, username: String, role: String)
 
 object JWTClaim {
 

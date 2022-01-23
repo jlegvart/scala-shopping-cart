@@ -1,4 +1,6 @@
 package com.playground.shoppingcart.domain.validation
 
-trait ValidationError
-case class UserAuthenticationError() extends ValidationError
+trait ValidationError extends Throwable {
+    def msg: String
+}
+case class UserAuthenticationError(msg: String) extends ValidationError

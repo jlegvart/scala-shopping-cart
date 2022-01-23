@@ -15,9 +15,8 @@ class CartRepository[F[_]: Sync](store: Ref[F, Map[Int, Cart]]) {
 
   def updateCart(cart: Cart) =
     (for {
-      userId <- OptionT.fromOption(cart.user.id)
       _ <- OptionT.liftF(store.update { m =>
-        m + (userId -> cart)
+        m + (cart.userId -> cart)
       })
     } yield cart).value
 
