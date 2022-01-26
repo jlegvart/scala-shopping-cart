@@ -33,7 +33,7 @@ import tsec.jws.mac.JWTMac
 import tsec.mac.jca.HMACSHA256
 import tsec.mac.jca.MacSigningKey
 import com.playground.shoppingcart.domain.item.ItemService
-import com.playground.shoppingcart.domain.validation.CartUpdateFailed
+import com.playground.shoppingcart.domain.validation.CartUpdateError
 import doobie.util.update
 
 class CartEndpoint[F[_]: Async: std.Console](
@@ -60,10 +60,10 @@ class CartEndpoint[F[_]: Async: std.Console](
         case Right(user) =>
           val action =
             for {
-              cartItem <- EitherT.liftF[F, CartUpdateFailed, CartItem](request.as[CartItem])
-              item <- EitherT.fromOptionF[F, CartUpdateFailed, Item](
+              cartItem <- EitherT.liftF[F, CartUpdateError, CartItem](request.as[CartItem])
+              item <- EitherT.fromOptionF[F, CartUpdateError, Item](
                 itemService.getItemById(cartItem.itemId),
-                CartUpdateFailed("Wrong item id"),
+                CartUpdateError("Wrong item id"),
               )
               _ <- cartService.updateCart(user.id.get, cartItem)
             } yield ()
