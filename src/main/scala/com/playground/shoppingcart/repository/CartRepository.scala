@@ -4,6 +4,7 @@ import com.playground.shoppingcart.domain.cart.Cart
 import cats.effect._
 import cats.syntax.all._
 import cats.data.OptionT
+import com.playground.shoppingcart.domain.cart.CartItem
 
 class CartRepository[F[_]: Sync](store: Ref[F, Map[Int, Cart]]) {
 
@@ -13,12 +14,9 @@ class CartRepository[F[_]: Sync](store: Ref[F, Map[Int, Cart]]) {
       userCart <- map.get(userId).pure[F]
     } yield userCart
 
-  def updateCart(userId: Int, cart: Cart) =
-    (for {
-      _ <- OptionT.liftF(store.update { m =>
-        m + (userId -> cart)
-      })
-    } yield cart).value
+  def updateCart(userId: Int, cart: Cart) = store.update {
+    _ + (userId -> cart)
+  }
 
   def deleteCart(userId: Int): F[Unit] = store.getAndUpdate(_ - userId) >> Sync[F].unit
 

@@ -8,16 +8,20 @@ import cats.effect.kernel.Async
 import cats.effect.std
 import cats.syntax.all._
 import com.playground.shoppingcart.domain.auth.JWTClaim
+import com.playground.shoppingcart.domain.cart.Cart
+import com.playground.shoppingcart.domain.cart.CartItem
 import com.playground.shoppingcart.domain.cart.CartService
+import com.playground.shoppingcart.domain.item.Item
 import com.playground.shoppingcart.domain.user.Customer
 import com.playground.shoppingcart.domain.user.Role
 import com.playground.shoppingcart.domain.user.User
 import com.playground.shoppingcart.domain.validation.UserAuthenticationError
 import io.circe._
-import io.circe.syntax._
 import io.circe.generic.auto
+import io.circe.syntax._
 import org.http4s.HttpRoutes
 import org.http4s._
+import org.http4s.circe.CirceEntityDecoder._
 import org.http4s.circe._
 import org.http4s.client.oauth1.HmacSha256
 import org.http4s.dsl.Http4sDsl
@@ -28,13 +32,13 @@ import tsec.authentication._
 import tsec.jws.mac.JWTMac
 import tsec.mac.jca.HMACSHA256
 import tsec.mac.jca.MacSigningKey
-import com.playground.shoppingcart.domain.cart.Cart
-import com.playground.shoppingcart.domain.cart.CartItem
-import org.http4s.circe.CirceEntityDecoder._
-import com.playground.shoppingcart.domain.item.Item
+import com.playground.shoppingcart.domain.item.ItemService
+import com.playground.shoppingcart.domain.validation.CartUpdateFailed
+import doobie.util.update
 
 class CartEndpoint[F[_]: Async: std.Console](
   cartService: CartService[F],
+  itemService: ItemService[F],
   key: MacSigningKey[HMACSHA256],
 ) extends Http4sDsl[F] {
 
@@ -42,10 +46,9 @@ class CartEndpoint[F[_]: Async: std.Console](
     authUser(request).value.flatMap {
       case Left(value) => Response[F](status = Status.Unauthorized).pure[F]
       case Right(user) =>
-        cartService.getUserCart(user.id.get).flatMap {
-          case None       => Ok(Cart.empty.asJson)
-          case Some(cart) => Ok(cart.asJson)
-        }
+        cartService
+          .getUserCart(user.id.get)
+          .flatMap(cart => Ok(cart.asJson))
     }
   }
 
@@ -55,11 +58,20 @@ class CartEndpoint[F[_]: Async: std.Console](
       .flatMap {
         case Left(value) => Response[F](status = Status.Unauthorized).pure[F]
         case Right(user) =>
-          for {
-            reqCart <- request.as[Cart]
-            _       <- cartService.updateCart(user.id.get, reqCart)
-            resp    <- Ok()
-          } yield resp
+          val action =
+            for {
+              cartItem <- EitherT.liftF[F, CartUpdateFailed, CartItem](request.as[CartItem])
+              item <- EitherT.fromOptionF[F, CartUpdateFailed, Item](
+                itemService.getItemById(cartItem.itemId),
+                CartUpdateFailed("Wrong item id"),
+              )
+              _ <- cartService.updateCart(user.id.get, cartItem)
+            } yield ()
+
+          action.value.flatMap {
+            case Left(updateFailedError) => BadRequest(updateFailedError.msg)
+            case Right(_)                => Created()
+          }
       }
   }
 
@@ -113,7 +125,8 @@ object CartEndpoint {
 
   def endpoints[F[_]: Async: std.Console](
     cartService: CartService[F],
+    itemService: ItemService[F],
     key: MacSigningKey[HMACSHA256],
-  ): HttpRoutes[F] = new CartEndpoint[F](cartService, key).endpoints
+  ): HttpRoutes[F] = new CartEndpoint[F](cartService, itemService, key).endpoints
 
 }
