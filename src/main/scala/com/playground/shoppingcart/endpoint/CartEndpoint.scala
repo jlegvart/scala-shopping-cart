@@ -36,6 +36,7 @@ import tsec.jws.mac.JWTMac
 import tsec.mac.jca.HMACSHA256
 import tsec.mac.jca.MacSigningKey
 import com.playground.shoppingcart.domain.cart.CartItem
+import org.http4s.dsl.request
 
 class CartEndpoint[F[_]: Async: std.Console](
   cartService: CartService[F],
@@ -44,37 +45,32 @@ class CartEndpoint[F[_]: Async: std.Console](
 ) extends Http4sDsl[F] {
 
   def getUserCart: HttpRoutes[F] = HttpRoutes.of[F] { case request @ GET -> Root =>
-    authUser(request).value.flatMap {
-      case Left(value) => Response[F](status = Status.Unauthorized).pure[F]
-      case Right(user) =>
-        cartService
-          .getUserCart(user.id.get)
-          .flatMap(cart => Ok(cart.asJson))
-    }
+    asAuthUser { authRequest =>
+      cartService
+        .getUserCart(authRequest.authUser.id.get)
+        .flatMap(cart => Ok(cart.asJson))
+    }(request)
   }
 
   def addToCart: HttpRoutes[F] = HttpRoutes.of[F] { case request @ POST -> Root =>
-    authUser(request)
-      .value
-      .flatMap {
-        case Left(value) => Response[F](status = Status.Unauthorized).pure[F]
-        case Right(user) =>
-          val action =
-            for {
-              newItem <- EitherT.liftF[F, CartUpdateError, NewCartItem](request.as[NewCartItem])
-              _       <- validateQuantity(newItem)
-              item <- EitherT.fromOptionF[F, CartUpdateError, Item](
-                itemService.getItemById(newItem.itemId),
-                CartUpdateError("Invalid item id"),
-              )
-              _ <- EitherT(cartService.updateCart(user.id.get, CartItem(item, newItem.quantity)))
-            } yield ()
+    asAuthUser { authRequest =>
+      val action =
+        for {
+          newItem <- EitherT.liftF[F, CartUpdateError, NewCartItem](request.as[NewCartItem])
+          _       <- validateQuantity(newItem)
+          item <- EitherT.fromOptionF[F, CartUpdateError, Item](
+            itemService.getItemById(newItem.itemId),
+            CartUpdateError("Invalid item id"),
+          )
+          user = authRequest.authUser
+          _ <- EitherT(cartService.updateCart(user.id.get, CartItem(item, newItem.quantity)))
+        } yield ()
 
-          action.value.flatMap {
-            case Left(updateFailedError) => BadRequest(updateFailedError.msg)
-            case Right(_)                => Created()
-          }
+      action.value.flatMap {
+        case Left(updateFailedError) => BadRequest(updateFailedError.msg)
+        case Right(_)                => Created()
       }
+    }(request)
   }
 
   private def validateQuantity(item: NewCartItem): EitherT[F, CartUpdateError, Unit] =
@@ -82,6 +78,15 @@ class CartEndpoint[F[_]: Async: std.Console](
       EitherT.left[Unit](CartUpdateError("Invalid quantity").pure[F])
     else
       EitherT.right[CartUpdateError](().pure[F])
+
+  private def asAuthUser(
+    f: AuthRequest[F] => F[Response[F]]
+  )(
+    request: Request[F]
+  ) = authUser(request).value.flatMap {
+    case Left(value) => Response[F](status = Status.Unauthorized).pure[F]
+    case Right(user) => f(AuthRequest[F](request, user))
+  }
 
   private def authUser(request: Request[F]): EitherT[F, UserAuthenticationError, User] =
     for {
