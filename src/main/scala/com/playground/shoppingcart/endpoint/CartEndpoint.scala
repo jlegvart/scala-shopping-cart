@@ -9,15 +9,18 @@ import cats.effect.std
 import cats.syntax.all._
 import com.playground.shoppingcart.domain.auth.JWTClaim
 import com.playground.shoppingcart.domain.cart.Cart
-import com.playground.shoppingcart.domain.cart.CartItem
+import com.playground.shoppingcart.domain.cart.NewCartItem
 import com.playground.shoppingcart.domain.cart.CartService
 import com.playground.shoppingcart.domain.item.Item
+import com.playground.shoppingcart.domain.item.ItemService
 import com.playground.shoppingcart.domain.user.Customer
 import com.playground.shoppingcart.domain.user.Role
 import com.playground.shoppingcart.domain.user.User
+import com.playground.shoppingcart.domain.validation.CartUpdateError
 import com.playground.shoppingcart.domain.validation.UserAuthenticationError
+import doobie.util.update
 import io.circe._
-import io.circe.generic.auto
+import io.circe.generic.auto._
 import io.circe.syntax._
 import org.http4s.HttpRoutes
 import org.http4s._
@@ -32,9 +35,7 @@ import tsec.authentication._
 import tsec.jws.mac.JWTMac
 import tsec.mac.jca.HMACSHA256
 import tsec.mac.jca.MacSigningKey
-import com.playground.shoppingcart.domain.item.ItemService
-import com.playground.shoppingcart.domain.validation.CartUpdateError
-import doobie.util.update
+import com.playground.shoppingcart.domain.cart.CartItem
 
 class CartEndpoint[F[_]: Async: std.Console](
   cartService: CartService[F],
@@ -60,12 +61,13 @@ class CartEndpoint[F[_]: Async: std.Console](
         case Right(user) =>
           val action =
             for {
-              cartItem <- EitherT.liftF[F, CartUpdateError, CartItem](request.as[CartItem])
+              newItem <- EitherT.liftF[F, CartUpdateError, NewCartItem](request.as[NewCartItem])
+              _       <- validateQuantity(newItem)
               item <- EitherT.fromOptionF[F, CartUpdateError, Item](
-                itemService.getItemById(cartItem.itemId),
-                CartUpdateError("Wrong item id"),
+                itemService.getItemById(newItem.itemId),
+                CartUpdateError("Invalid item id"),
               )
-              _ <- cartService.updateCart(user.id.get, cartItem)
+              _ <- EitherT(cartService.updateCart(user.id.get, CartItem(item, newItem.quantity)))
             } yield ()
 
           action.value.flatMap {
@@ -74,6 +76,12 @@ class CartEndpoint[F[_]: Async: std.Console](
           }
       }
   }
+
+  private def validateQuantity(item: NewCartItem): EitherT[F, CartUpdateError, Unit] =
+    if (item.quantity <= 0)
+      EitherT.left[Unit](CartUpdateError("Invalid quantity").pure[F])
+    else
+      EitherT.right[CartUpdateError](().pure[F])
 
   private def authUser(request: Request[F]): EitherT[F, UserAuthenticationError, User] =
     for {

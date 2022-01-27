@@ -2,24 +2,11 @@ package com.playground.shoppingcart.domain.cart
 
 import com.playground.shoppingcart.domain.item.Item
 import com.playground.shoppingcart.domain.user.User
-import io.circe._
-import io.circe.syntax._
-import io.circe.generic.semiauto._
 
 final case class Cart(items: List[CartItem], total: BigDecimal)
-final case class CartItem(itemId: Int, quantity: Int)
+final case class CartItem(item: Item, quantity: Int)
+final case class NewCartItem(itemId: Int, quantity: Int)
 
 object Cart {
-
-  implicit val cartEncoder: Encoder[Cart] = deriveEncoder[Cart]
-  implicit val cartDecoder: Decoder[Cart] = deriveDecoder[Cart]
-
   def empty: Cart = Cart(List.empty, 0)
-}
-
-object CartItem {
-
-  implicit val cartItemEncoder: Encoder[CartItem] = deriveEncoder[CartItem]
-  implicit val cartItemDecoder: Decoder[CartItem] = deriveDecoder[CartItem]
-
 }

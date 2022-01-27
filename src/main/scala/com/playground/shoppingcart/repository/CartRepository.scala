@@ -4,7 +4,7 @@ import com.playground.shoppingcart.domain.cart.Cart
 import cats.effect._
 import cats.syntax.all._
 import cats.data.OptionT
-import com.playground.shoppingcart.domain.cart.CartItem
+import com.playground.shoppingcart.domain.cart.NewCartItem
 
 class CartRepository[F[_]: Sync](store: Ref[F, Map[Int, Cart]]) {
 
