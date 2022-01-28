@@ -18,8 +18,6 @@ class CartRepository[F[_]: Sync](store: Ref[F, Map[Int, Cart]]) {
     _ + (userId -> cart)
   }
 
-  def deleteCart(userId: Int): F[Unit] = store.getAndUpdate(_ - userId) >> Sync[F].unit
-
 }
 
 object CartRepository {

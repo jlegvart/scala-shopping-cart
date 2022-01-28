@@ -63,7 +63,7 @@ class CartEndpoint[F[_]: Async: std.Console](
             CartUpdateError("Invalid item id"),
           )
           user = authRequest.authUser
-          _ <- EitherT(cartService.updateCart(user.id.get, CartItem(item, newItem.quantity)))
+          _ <- EitherT(cartService.addToCart(user.id.get, CartItem(item, newItem.quantity)))
         } yield ()
 
       action.value.flatMap {
@@ -71,6 +71,16 @@ class CartEndpoint[F[_]: Async: std.Console](
         case Right(_)                => Created()
       }
     }(request)
+  }
+
+  def updateCart: HttpRoutes[F] = ???
+
+  def deleteFromCart: HttpRoutes[F] = HttpRoutes.of[F] {
+    case request @ DELETE -> Root / IntVar(itemId) =>
+      asAuthUser { authRequest =>
+        cartService.deleteItemFromCart(authRequest.authUser.id.get, itemId) >>
+          NoContent()
+      }(request)
   }
 
   private def validateQuantity(item: NewCartItem): EitherT[F, CartUpdateError, Unit] =
@@ -130,7 +140,7 @@ class CartEndpoint[F[_]: Async: std.Console](
         claims => User(Some(claims.userId), claims.username, "", Role.toRole(claims.role)).asRight,
       )
 
-  private def endpoints: HttpRoutes[F] = getUserCart <+> addToCart
+  private def endpoints: HttpRoutes[F] = getUserCart <+> addToCart <+> deleteFromCart
 
 }
 

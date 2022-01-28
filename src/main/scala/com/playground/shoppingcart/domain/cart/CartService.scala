@@ -15,7 +15,7 @@ class CartService[F[_]: Sync](cartRepository: CartRepository[F]) {
     case Some(cart) => cart
   }
 
-  def updateCart(userId: Int, item: CartItem): F[Either[CartUpdateError, Unit]] =
+  def addToCart(userId: Int, item: CartItem): F[Either[CartUpdateError, Unit]] =
     (for {
       cart <- EitherT.liftF[F, CartUpdateError, Cart](getUserCart(userId))
       _    <- EitherT.fromEither(itemExistsInCart(item, cart))
@@ -24,7 +24,12 @@ class CartService[F[_]: Sync](cartRepository: CartRepository[F]) {
       _ <- EitherT.liftF[F, CartUpdateError, Unit](cartRepository.updateCart(userId, newCart))
     } yield ()).value
 
-  def deleteCart(userId: Int): F[Unit] = cartRepository.deleteCart(userId)
+  def deleteItemFromCart(userId: Int, itemId: Int): F[Unit] =
+    for {
+      cart <- getUserCart(userId)
+      items = cart.items.filter(_.item.id.get != itemId)
+      _ <- cartRepository.updateCart(userId, Cart(items, calculateCheckoutPrice(items)))
+    } yield ()
 
   def itemExistsInCart(cartItem: CartItem, cart: Cart): Either[CartUpdateError, Unit] = cart
     .items
