@@ -31,7 +31,12 @@ class CartService[F[_]: Sync](cartRepository: CartRepository[F]) {
       _ <- cartRepository.updateCart(userId, Cart(items, calculateCheckoutPrice(items)))
     } yield ()
 
-  def itemExistsInCart(cartItem: CartItem, cart: Cart): Either[CartUpdateError, Unit] = cart
+  def updateCartItems(
+    userId: Int,
+    items: List[CartItem],
+  ) = cartRepository.updateCart(userId, Cart(items, calculateCheckoutPrice(items)))
+
+  private def itemExistsInCart(cartItem: CartItem, cart: Cart): Either[CartUpdateError, Unit] = cart
     .items
     .find(_.item.id == cartItem.item.id)
     .map(_ => CartUpdateError("Item already exists"))

@@ -37,6 +37,7 @@ import tsec.mac.jca.HMACSHA256
 import tsec.mac.jca.MacSigningKey
 import com.playground.shoppingcart.domain.cart.CartItem
 import org.http4s.dsl.request
+import com.playground.shoppingcart.domain.cart.UpdateCartItems
 
 class CartEndpoint[F[_]: Async: std.Console](
   cartService: CartService[F],
@@ -73,7 +74,25 @@ class CartEndpoint[F[_]: Async: std.Console](
     }(request)
   }
 
-  def updateCart: HttpRoutes[F] = ???
+  def updateCart: HttpRoutes[F] = HttpRoutes.of[F] { case request @ PUT -> Root =>
+    asAuthUser { authRequest =>
+      val cartItems =
+        for {
+          updateCartReq <- request.as[UpdateCartItems]
+          validatedCartItems = updateCartReq.items.map(asValidCartItem).toList
+          items <- validatedCartItems.sequence
+        } yield items.sequence
+
+      cartItems.flatMap {
+        case Left(updateError) => BadRequest(updateError.msg)
+        case Right(items) =>
+          cartService.updateCartItems(
+            authRequest.authUser.id.get,
+            items,
+          ) >> NoContent()
+      }
+    }(request)
+  }
 
   def deleteFromCart: HttpRoutes[F] = HttpRoutes.of[F] {
     case request @ DELETE -> Root / IntVar(itemId) =>
@@ -82,6 +101,31 @@ class CartEndpoint[F[_]: Async: std.Console](
           NoContent()
       }(request)
   }
+
+  private def asValidCartItem: NewCartItem => F[Either[CartUpdateError, CartItem]] =
+    newCartItem =>
+      if (newCartItem.quantity <= 0)
+        Either
+          .left[CartUpdateError, CartItem](
+            CartUpdateError("Invalid quantity: " + newCartItem.quantity.toString())
+          )
+          .pure[F]
+      else
+        toCartItem(newCartItem.itemId).flatMap {
+          case Left(err) => Either.left[CartUpdateError, CartItem](err).pure[F]
+          case Right(item) =>
+            Either.right[CartUpdateError, CartItem](CartItem(item, newCartItem.quantity)).pure[F]
+        }
+
+  private def toCartItem: Int => F[Either[CartUpdateError, Item]] =
+    itemId =>
+      itemService.getItemById(itemId).flatMap {
+        case None =>
+          Either
+            .left[CartUpdateError, Item](CartUpdateError("Invalid item id: " + itemId.toString()))
+            .pure[F]
+        case Some(item) => Either.right[CartUpdateError, Item](item).pure[F]
+      }
 
   private def validateQuantity(item: NewCartItem): EitherT[F, CartUpdateError, Unit] =
     if (item.quantity <= 0)
@@ -140,7 +184,7 @@ class CartEndpoint[F[_]: Async: std.Console](
         claims => User(Some(claims.userId), claims.username, "", Role.toRole(claims.role)).asRight,
       )
 
-  private def endpoints: HttpRoutes[F] = getUserCart <+> addToCart <+> deleteFromCart
+  private def endpoints: HttpRoutes[F] = getUserCart <+> addToCart <+> deleteFromCart <+> updateCart
 
 }
 

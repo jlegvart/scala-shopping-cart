@@ -1,11 +1,10 @@
 package com.playground.shoppingcart.repository
 
-import doobie._
-import doobie.implicits._
-import cats._
 import cats.effect._
 import cats.implicits._
 import com.playground.shoppingcart.domain.item.Item
+import doobie._
+import doobie.implicits._
 
 class ItemRepository[F[_]: MonadCancelThrow](xa: Transactor[F]) {
 
