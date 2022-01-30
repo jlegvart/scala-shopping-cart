@@ -33,6 +33,7 @@ import tsec.jwt._
 import tsec.mac.jca._
 
 import scala.concurrent.ExecutionContext.global
+import com.playground.shoppingcart.endpoint.OrderEndpoint
 
 object Server extends IOApp {
 
@@ -60,6 +61,7 @@ object Server extends IOApp {
           "/categories" -> CategoryEndpoint.endpoints[F](categoryService),
           "/items"      -> ItemEndpoint.endpoints[F](itemService),
           "/cart"       -> CartEndpoint.endpoints[F](cartService, itemService, key),
+          "/order"      -> OrderEndpoint.endpoints[F](cartService, key),
         ).orNotFound
       server <-
         BlazeServerBuilder[F](global)
