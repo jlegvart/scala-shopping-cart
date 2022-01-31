@@ -12,7 +12,9 @@ class OrderEndpoint[F[_]: Async](
   key: MacSigningKey[HMACSHA256],
 ) extends Http4sDsl[F] {
 
-  def checkout: HttpRoutes[F] = HttpRoutes.of[F] { case request @ POST -> Root / "checkout" => Ok() }
+  def checkout: HttpRoutes[F] = HttpRoutes.of[F] { case request @ POST -> Root / "checkout" =>
+    Ok()
+  }
 
   def endpoints: HttpRoutes[F] = checkout
 

@@ -14,6 +14,8 @@ import com.playground.shoppingcart.endpoint.CartEndpoint
 import com.playground.shoppingcart.endpoint.CategoryEndpoint
 import com.playground.shoppingcart.endpoint.CompanyEndpoint
 import com.playground.shoppingcart.endpoint.ItemEndpoint
+import com.playground.shoppingcart.endpoint.OrderEndpoint
+import com.playground.shoppingcart.endpoint.validation.AuthValidation
 import com.playground.shoppingcart.repository.CartRepository
 import com.playground.shoppingcart.repository.CategoryRepository
 import com.playground.shoppingcart.repository.CompanyRepository
@@ -33,7 +35,6 @@ import tsec.jwt._
 import tsec.mac.jca._
 
 import scala.concurrent.ExecutionContext.global
-import com.playground.shoppingcart.endpoint.OrderEndpoint
 
 object Server extends IOApp {
 
@@ -44,6 +45,7 @@ object Server extends IOApp {
       _          <- Resource.eval(DatabaseConfig.initDB[F](config.db))
       key        <- Resource.liftK(HMACSHA256.generateKey[F])
       store      <- Resource.liftK(Ref[F].of(Map.empty[Int, Cart]))
+      authValidation     = new AuthValidation[F](key)
       userRepository     = new UserRepository[F](transactor)
       companyRepository  = new CompanyRepository[F](transactor)
       categoryRepository = new CategoryRepository[F](transactor)
@@ -60,7 +62,7 @@ object Server extends IOApp {
           "/companies"  -> CompanyEndpoint.endpoints[F](companyService),
           "/categories" -> CategoryEndpoint.endpoints[F](categoryService),
           "/items"      -> ItemEndpoint.endpoints[F](itemService),
-          "/cart"       -> CartEndpoint.endpoints[F](cartService, itemService, key),
+          "/cart"       -> CartEndpoint.endpoints[F](cartService, itemService, authValidation),
           "/order"      -> OrderEndpoint.endpoints[F](cartService, key),
         ).orNotFound
       server <-
