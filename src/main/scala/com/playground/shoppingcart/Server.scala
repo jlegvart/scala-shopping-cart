@@ -63,7 +63,7 @@ object Server extends IOApp {
           "/categories" -> CategoryEndpoint.endpoints[F](categoryService),
           "/items"      -> ItemEndpoint.endpoints[F](itemService),
           "/cart"       -> CartEndpoint.endpoints[F](cartService, itemService, authValidation),
-          "/order"      -> OrderEndpoint.endpoints[F](cartService, key),
+          "/order"      -> OrderEndpoint.endpoints[F](cartService, authValidation),
         ).orNotFound
       server <-
         BlazeServerBuilder[F](global)
