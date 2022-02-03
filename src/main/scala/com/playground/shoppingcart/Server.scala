@@ -63,7 +63,7 @@ object Server extends IOApp {
       itemService        = new ItemService[F](itemRepository)
       cartService        = new CartService[F](cartRepository)
       paymentService     = new PaymentService[F](paymentRepository)
-      orderService       = new OrderService[F](orderRepository)
+      orderService       = new OrderService[F](paymentService, orderRepository, transactor)
       httpApp =
         Router(
           "/"           -> AuthEndpoint.endpoints(userService, key),

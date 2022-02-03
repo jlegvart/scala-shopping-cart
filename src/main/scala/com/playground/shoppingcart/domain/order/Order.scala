@@ -8,7 +8,7 @@ object Paid extends OrderStatus
 
 final case class Order(
   id: Option[Int] = None,
-  paymentId: Int,
+  paymentId: Option[Int],
   status: OrderStatus,
   items: List[OrderItem],
   price: BigDecimal,

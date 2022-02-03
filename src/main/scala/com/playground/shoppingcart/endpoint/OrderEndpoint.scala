@@ -1,6 +1,5 @@
 package com.playground.shoppingcart.endpoint
 
-import cats._
 import cats.effect.kernel.Async
 import cats.syntax.all._
 import com.playground.shoppingcart.checkout.Checkout
@@ -28,6 +27,9 @@ import com.playground.shoppingcart.domain.cart.Cart
 import com.playground.shoppingcart.domain.payment.Payment
 import com.playground.shoppingcart.domain.order.OrderService
 import com.playground.shoppingcart.domain.payment.PaymentService
+import com.playground.shoppingcart.domain.order.OrderItem
+import com.playground.shoppingcart.domain.order.Order
+import com.playground.shoppingcart.domain.order.Paid
 
 class OrderEndpoint[F[_]: Async](
   cartService: CartService[F],
@@ -52,18 +54,25 @@ class OrderEndpoint[F[_]: Async](
             else
               EitherT.rightT[F, CheckoutError](())
           _ <- validateCreditCard(checkoutR.creditCard, checkoutR.exp)
-        } yield cart
+        } yield (cart, checkoutR)
 
       validate.value.flatMap {
-        case Left(err)   => BadRequest(err.msg)
-        case Right(cart) => Ok("ok")
+        case Left(err)               => BadRequest(err.msg)
+        case Right((cart, checkout)) => executeOrder(cart, checkout) >> Ok()
       }
     }(request)
   }
 
-  private def createPayment(payer: String, creditCard: String) = ???
-
-  private def createOrder() = ???
+  private def executeOrder(cart: Cart, checkout: Checkout): F[Order] =
+    for {
+      payment <- paymentService.executePayment(checkout.payer, checkout.creditCard)
+      orderItems =
+        cart
+          .items
+          .map(item => OrderItem(None, item.item.id.get, item.quantity, item.item.price))
+          .toList
+      order <- orderService.create(Order(None, None, Paid, orderItems, cart.total), payment)
+    } yield order
 
   private def validateCreditCard(
     number: String,

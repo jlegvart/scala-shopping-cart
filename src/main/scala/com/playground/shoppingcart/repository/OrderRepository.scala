@@ -10,7 +10,7 @@ import doobie._
 import doobie.implicits._
 import com.playground.shoppingcart.domain.order.OrderItem
 
-class OrderRepository[F[_]](transactor: HikariTransactor[F]) {
+class OrderRepository[F[_]: Sync](transactor: HikariTransactor[F]) {
 
   def create(order: Order): ConnectionIO[Order] = {
     val orderQ =
