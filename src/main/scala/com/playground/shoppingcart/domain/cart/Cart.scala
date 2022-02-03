@@ -10,4 +10,7 @@ final case class UpdateCartItems(items: Set[NewCartItem])
 
 object Cart {
   def empty: Cart = Cart(List.empty, 0)
+
+  def isEmpty(cart: Cart): Boolean = cart.items.isEmpty
+
 }

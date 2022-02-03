@@ -6,3 +6,4 @@ trait ValidationError extends Throwable {
 
 case class UserAuthenticationError(msg: String) extends ValidationError
 case class CartUpdateError(msg: String)         extends ValidationError
+case class CheckoutError(msg: String)           extends ValidationError
