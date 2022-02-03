@@ -26,9 +26,13 @@ import java.time.YearMonth
 import cats.data.EitherT
 import com.playground.shoppingcart.domain.cart.Cart
 import com.playground.shoppingcart.domain.payment.Payment
+import com.playground.shoppingcart.domain.order.OrderService
+import com.playground.shoppingcart.domain.payment.PaymentService
 
 class OrderEndpoint[F[_]: Async](
   cartService: CartService[F],
+  orderService: OrderService[F],
+  paymentService: PaymentService[F],
   authValidation: AuthValidation[F],
 ) extends Http4sDsl[F] {
 
@@ -51,8 +55,8 @@ class OrderEndpoint[F[_]: Async](
         } yield cart
 
       validate.value.flatMap {
-        case Left(err) => BadRequest(err.msg)
-        case Right(cart)  => Ok("ok")
+        case Left(err)   => BadRequest(err.msg)
+        case Right(cart) => Ok("ok")
       }
     }(request)
   }
@@ -60,7 +64,6 @@ class OrderEndpoint[F[_]: Async](
   private def createPayment(payer: String, creditCard: String) = ???
 
   private def createOrder() = ???
-
 
   private def validateCreditCard(
     number: String,
@@ -103,7 +106,10 @@ object OrderEndpoint {
 
   def endpoints[F[_]: Async](
     cartService: CartService[F],
+    orderService: OrderService[F],
+    paymentService: PaymentService[F],
     authValidation: AuthValidation[F],
-  ): HttpRoutes[F] = new OrderEndpoint[F](cartService, authValidation).endpoints
+  ): HttpRoutes[F] =
+    new OrderEndpoint[F](cartService, orderService, paymentService, authValidation).endpoints
 
 }

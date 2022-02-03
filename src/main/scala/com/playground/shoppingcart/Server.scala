@@ -35,6 +35,10 @@ import tsec.jwt._
 import tsec.mac.jca._
 
 import scala.concurrent.ExecutionContext.global
+import com.playground.shoppingcart.repository.PaymentRepository
+import com.playground.shoppingcart.repository.OrderRepository
+import com.playground.shoppingcart.domain.payment.PaymentService
+import com.playground.shoppingcart.domain.order.OrderService
 
 object Server extends IOApp {
 
@@ -51,11 +55,15 @@ object Server extends IOApp {
       categoryRepository = new CategoryRepository[F](transactor)
       itemRepository     = new ItemRepository[F](transactor)
       cartRepository     = new CartRepository[F](store)
+      paymentRepository  = new PaymentRepository[F](transactor)
+      orderRepository    = new OrderRepository[F](transactor)
       userService        = new UserService[F](userRepository)
       companyService     = new CompanyService[F](companyRepository)
       categoryService    = new CategoryService[F](categoryRepository)
       itemService        = new ItemService[F](itemRepository)
       cartService        = new CartService[F](cartRepository)
+      paymentService     = new PaymentService[F](paymentRepository)
+      orderService       = new OrderService[F](orderRepository)
       httpApp =
         Router(
           "/"           -> AuthEndpoint.endpoints(userService, key),
@@ -63,7 +71,8 @@ object Server extends IOApp {
           "/categories" -> CategoryEndpoint.endpoints[F](categoryService),
           "/items"      -> ItemEndpoint.endpoints[F](itemService),
           "/cart"       -> CartEndpoint.endpoints[F](cartService, itemService, authValidation),
-          "/order"      -> OrderEndpoint.endpoints[F](cartService, authValidation),
+          "/order" -> OrderEndpoint
+            .endpoints[F](cartService, orderService, paymentService, authValidation),
         ).orNotFound
       server <-
         BlazeServerBuilder[F](global)
