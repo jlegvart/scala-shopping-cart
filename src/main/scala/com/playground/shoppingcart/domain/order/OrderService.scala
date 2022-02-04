@@ -15,7 +15,7 @@ class OrderService[F[_]: Sync](
   transactor: HikariTransactor[F],
 ) {
 
-  def create(order: Order, payment: Payment): F[Order] = {
+  def create(order: Order, payment: Payment): F[Either[Throwable, Order]] = {
     val q =
       for {
         newPayment <- paymentService.create(payment)
@@ -23,7 +23,7 @@ class OrderService[F[_]: Sync](
         newOrder <- orderRepository.create(updOrder)
       } yield newOrder
 
-    q.transact(transactor)
+    q.transact(transactor).attempt
   }
 
 }

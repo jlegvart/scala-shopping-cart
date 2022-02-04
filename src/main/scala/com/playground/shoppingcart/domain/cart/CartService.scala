@@ -36,6 +36,8 @@ class CartService[F[_]: Sync](cartRepository: CartRepository[F]) {
     items: List[CartItem],
   ) = cartRepository.updateCart(userId, Cart(items, calculateCheckoutPrice(items)))
 
+  def clearCart(userId: Int): F[Unit] = cartRepository.updateCart(userId, Cart.empty)
+
   private def itemExistsInCart(cartItem: CartItem, cart: Cart): Either[CartUpdateError, Unit] = cart
     .items
     .find(_.item.id == cartItem.item.id)

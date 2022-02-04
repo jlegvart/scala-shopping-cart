@@ -1,15 +1,11 @@
 package com.playground.shoppingcart.domain.order
 
-import cats.Id
 import com.playground.shoppingcart.domain.item.Item
-
-trait OrderStatus
-object Paid extends OrderStatus
 
 final case class Order(
   id: Option[Int] = None,
   paymentId: Option[Int],
-  status: OrderStatus,
+  userId: Int,
   items: List[OrderItem],
   price: BigDecimal,
 )

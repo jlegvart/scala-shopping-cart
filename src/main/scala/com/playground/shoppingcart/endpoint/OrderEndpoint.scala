@@ -29,7 +29,6 @@ import com.playground.shoppingcart.domain.order.OrderService
 import com.playground.shoppingcart.domain.payment.PaymentService
 import com.playground.shoppingcart.domain.order.OrderItem
 import com.playground.shoppingcart.domain.order.Order
-import com.playground.shoppingcart.domain.order.Paid
 
 class OrderEndpoint[F[_]: Async](
   cartService: CartService[F],
@@ -57,13 +56,24 @@ class OrderEndpoint[F[_]: Async](
         } yield (cart, checkoutR)
 
       validate.value.flatMap {
-        case Left(err)               => BadRequest(err.msg)
-        case Right((cart, checkout)) => executeOrder(cart, checkout) >> Ok()
+        case Left(err) => BadRequest(err.msg)
+        case Right((cart, checkout)) =>
+          executeOrder(cart, checkout, authRequet.authUser.id.get).flatMap(handleExecutedOrder)
       }
     }(request)
   }
 
-  private def executeOrder(cart: Cart, checkout: Checkout): F[Order] =
+  private def handleExecutedOrder(order: Either[Throwable, Order]): F[Response[F]] =
+    order match {
+      case Left(error)  => InternalServerError("Error during checkout process")
+      case Right(order) => cartService.clearCart(order.userId) >> Ok(order.id.get.asJson)
+    }
+
+  private def executeOrder(
+    cart: Cart,
+    checkout: Checkout,
+    userId: Int,
+  ): F[Either[Throwable, Order]] =
     for {
       payment <- paymentService.executePayment(checkout.payer, checkout.creditCard)
       orderItems =
@@ -71,7 +81,7 @@ class OrderEndpoint[F[_]: Async](
           .items
           .map(item => OrderItem(None, item.item.id.get, item.quantity, item.item.price))
           .toList
-      order <- orderService.create(Order(None, None, Paid, orderItems, cart.total), payment)
+      order <- orderService.create(Order(None, None, userId, orderItems, cart.total), payment)
     } yield order
 
   private def validateCreditCard(
