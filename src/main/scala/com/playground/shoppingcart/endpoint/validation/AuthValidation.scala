@@ -79,7 +79,7 @@ class AuthValidation[F[_]: Async](key: MacSigningKey[HMACSHA256]) {
         _ =>
           UserAuthenticationError("Invalid JWT token structure, cannot extract user data")
             .asLeft[User],
-        claims => User(None, claims.username, "", Role.toRole(claims.role)).asRight,
+        claims => User(Some(claims.userId), claims.username, "", Role.toRole(claims.role)).asRight,
       )
 
 }
