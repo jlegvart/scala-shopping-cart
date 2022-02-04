@@ -45,7 +45,7 @@ class OrderEndpoint[F[_]: Async](
         for {
           checkoutR <- EitherT.liftF[F, CheckoutError, Checkout](request.as[Checkout])
           cart <- EitherT.liftF[F, CheckoutError, Cart](
-            cartService.getUserCart(authRequet.authUser.id.get)
+            cartService.getUserCart(authRequet.authUser.id)
           )
           _ <-
             if (Cart.isEmpty(cart))
@@ -58,7 +58,7 @@ class OrderEndpoint[F[_]: Async](
       validate.value.flatMap {
         case Left(err) => BadRequest(err.msg)
         case Right((cart, checkout)) =>
-          executeOrder(cart, checkout, authRequet.authUser.id.get).flatMap(handleExecutedOrder)
+          executeOrder(cart, checkout, authRequet.authUser.id).flatMap(handleExecutedOrder)
       }
     }(request)
   }

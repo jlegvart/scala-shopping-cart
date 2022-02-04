@@ -10,6 +10,7 @@ import com.playground.shoppingcart.domain.user.Role
 import com.playground.shoppingcart.domain.user.User
 import com.playground.shoppingcart.domain.validation.UserAuthenticationError
 import com.playground.shoppingcart.endpoint.AuthorizedRequest
+import com.playground.shoppingcart.endpoint.AuthorizedUser
 import org.http4s.Request
 import org.http4s.Response
 import org.http4s.Status
@@ -27,9 +28,16 @@ class AuthValidation[F[_]: Async](key: MacSigningKey[HMACSHA256]) {
     f: AuthorizedRequest[F] => F[Response[F]]
   )(
     request: Request[F]
-  ) = authUser(request).value.flatMap {
+  ): F[Response[F]] = authUser(request).value.flatMap {
     case Left(value) => Response[F](status = Status.Unauthorized).pure[F]
-    case Right(user) => f(AuthorizedRequest[F](request, user))
+    case Right(user) =>
+      val userId = OptionT
+        .fromOption(user.id)
+        .getOrElseF(Async[F].raiseError(new RuntimeException("User id is empty")))
+
+      userId.flatMap(id =>
+        f(AuthorizedRequest[F](request, new AuthorizedUser(id, user.username, user.role)))
+      )
   }
 
   private def authUser(request: Request[F]): EitherT[F, UserAuthenticationError, User] =
@@ -71,7 +79,7 @@ class AuthValidation[F[_]: Async](key: MacSigningKey[HMACSHA256]) {
         _ =>
           UserAuthenticationError("Invalid JWT token structure, cannot extract user data")
             .asLeft[User],
-        claims => User(Some(claims.userId), claims.username, "", Role.toRole(claims.role)).asRight,
+        claims => User(None, claims.username, "", Role.toRole(claims.role)).asRight,
       )
 
 }

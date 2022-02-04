@@ -37,13 +37,13 @@ import org.http4s.implicits._
 class CartEndpoint[F[_]: Async](
   cartService: CartService[F],
   itemService: ItemService[F],
-  authValidation: AuthValidation[F]
+  authValidation: AuthValidation[F],
 ) extends Http4sDsl[F] {
 
   def getUserCart: HttpRoutes[F] = HttpRoutes.of[F] { case request @ GET -> Root =>
     authValidation.asAuthUser { authRequest =>
       cartService
-        .getUserCart(authRequest.authUser.id.get)
+        .getUserCart(authRequest.authUser.id)
         .flatMap(cart => Ok(cart.asJson))
     }(request)
   }
@@ -59,7 +59,7 @@ class CartEndpoint[F[_]: Async](
             CartUpdateError("Invalid item id"),
           )
           user = authRequest.authUser
-          _ <- EitherT(cartService.addToCart(user.id.get, CartItem(item, newItem.quantity)))
+          _ <- EitherT(cartService.addToCart(user.id, CartItem(item, newItem.quantity)))
         } yield ()
 
       action.value.flatMap {
@@ -82,7 +82,7 @@ class CartEndpoint[F[_]: Async](
         case Left(updateError) => BadRequest(updateError.msg)
         case Right(items) =>
           cartService.updateCartItems(
-            authRequest.authUser.id.get,
+            authRequest.authUser.id,
             items,
           ) >> NoContent()
       }
@@ -92,7 +92,7 @@ class CartEndpoint[F[_]: Async](
   def deleteFromCart: HttpRoutes[F] = HttpRoutes.of[F] {
     case request @ DELETE -> Root / IntVar(itemId) =>
       authValidation.asAuthUser { authRequest =>
-        cartService.deleteItemFromCart(authRequest.authUser.id.get, itemId) >>
+        cartService.deleteItemFromCart(authRequest.authUser.id, itemId) >>
           NoContent()
       }(request)
   }
@@ -137,7 +137,7 @@ object CartEndpoint {
   def endpoints[F[_]: Async](
     cartService: CartService[F],
     itemService: ItemService[F],
-    authValidation: AuthValidation[F]
+    authValidation: AuthValidation[F],
   ): HttpRoutes[F] = new CartEndpoint[F](cartService, itemService, authValidation).endpoints
 
 }
