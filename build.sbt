@@ -4,8 +4,6 @@ name         := "scala-shopping-cart"
 organization := "com.playground"
 version      := "1.0"
 
-fork in run := true
-
 lazy val logbackVersion     = "1.2.10"
 lazy val log4cats           = "2.1.1"
 lazy val catsVersion        = "2.7.0"
