@@ -30,92 +30,101 @@ import com.playground.shoppingcart.domain.payment.PaymentService
 import com.playground.shoppingcart.domain.order.OrderItem
 import com.playground.shoppingcart.domain.order.Order
 
-class OrderEndpoint[F[_]: Async](
+class OrderEndpoint[F[_]](
   cartService: CartService[F],
   orderService: OrderService[F],
   paymentService: PaymentService[F],
   authValidation: AuthValidation[F],
+)(
+  implicit F: Async[F]
 ) extends Http4sDsl[F] {
 
   private val dtf = DateTimeFormatter.ofPattern("MM/uu")
 
   def checkout: HttpRoutes[F] = HttpRoutes.of[F] { case request @ POST -> Root / "checkout" =>
     authValidation.asAuthUser { authRequet =>
-      val validate =
+      val cartWithCheckout =
         for {
-          checkoutR <- EitherT.liftF[F, CheckoutError, Checkout](request.as[Checkout])
-          cart <- EitherT.liftF[F, CheckoutError, Cart](
-            cartService.getUserCart(authRequet.authUser.id)
-          )
-          _ <-
-            if (Cart.isEmpty(cart))
-              EitherT.leftT[F, Unit](CheckoutError("Cart is empty"))
-            else
-              EitherT.rightT[F, CheckoutError](())
-          _ <- validateCreditCard(checkoutR.creditCard, checkoutR.exp)
-        } yield (cart, checkoutR)
+          checkout <- request.as[Checkout]
+          cart     <- cartService.getUserCart(authRequet.authUser.id)
+          _        <- cartIsNotEmpty(cart)
+          _        <- validateCreditCard(checkout.creditCard, checkout.exp)
+        } yield (cart, checkout)
 
-      validate.value.flatMap {
-        case Left(err) => BadRequest(err.msg)
-        case Right((cart, checkout)) =>
-          executeOrder(cart, checkout, authRequet.authUser.id).flatMap(handleExecutedOrder)
-      }
+      cartWithCheckout
+        .flatMap { cartWithCheckout =>
+          val (cart, checkout) = cartWithCheckout
+
+          for {
+            order <- executeOrder(cart, checkout, authRequet.authUser.id)
+            _     <- cartService.clearCart(order.userId)
+            id = order.id.getOrElse(0)
+            ok <- Ok(id.asJson)
+          } yield ok
+        }
+        .handleErrorWith {
+          case CheckoutError(msg) => BadRequest(msg)
+          case _                  => InternalServerError("Error during checkout operation")
+        }
     }(request)
   }
 
-  private def handleExecutedOrder(order: Either[Throwable, Order]): F[Response[F]] =
-    order match {
-      case Left(error)  => InternalServerError("Error during checkout process")
-      case Right(order) => cartService.clearCart(order.userId) >> Ok(order.id.get.asJson)
-    }
+  private def cartIsNotEmpty(cart: Cart): F[Unit] =
+    if (Cart.isEmpty(cart))
+      F.raiseError(CheckoutError("Cart is empty"))
+    else
+      F.unit
 
   private def executeOrder(
     cart: Cart,
     checkout: Checkout,
     userId: Int,
-  ): F[Either[Throwable, Order]] =
-    for {
-      payment <- paymentService.executePayment(checkout.payer, checkout.creditCard)
-      orderItems =
-        cart
-          .items
-          .map(item => OrderItem(None, item.item.id.get, item.quantity, item.item.price))
-          .toList
-      order <- orderService.create(Order(None, None, userId, orderItems, cart.total), payment)
-    } yield order
+  ): F[Order] = {
+    val orderItems = cart
+      .items
+      .map(item => OrderItem(None, item.item.id.get, item.quantity, item.item.price))
+
+    paymentService
+      .executePayment(checkout.payer, checkout.creditCard)
+      .flatMap(payment => createOrder(userId, orderItems, payment, cart.total))
+  }
+
+  private def createOrder(
+    userId: Int,
+    orderItems: List[OrderItem],
+    payment: Payment,
+    total: BigDecimal,
+  ): F[Order] = orderService.create(Order(None, None, userId, orderItems, total), payment).flatMap {
+    case Left(error)  => F.raiseError(error)
+    case Right(order) => F.pure(order)
+  }
 
   private def validateCreditCard(
     number: String,
     exp: String,
-  ): EitherT[F, CheckoutError, Unit] =
-    for {
-      _ <- validateNumbers(number)
-      _ <- validateCCExp(exp)
-    } yield ()
+  ): F[Unit] = validateCCNumbers(number) *> validateCCExp(exp)
 
-  private def validateNumbers(number: String) =
+  private def validateCCNumbers(number: String): F[Unit] =
     if (number.forall(_.isDigit))
-      EitherT.rightT[F, CheckoutError](())
+      F.unit
     else
-      EitherT.leftT[F, Unit](CheckoutError("Invalid credit card"))
+      F.raiseError(CheckoutError("Invalid credit card number"))
 
-  private def validateCCExp(exp: String): EitherT[F, CheckoutError, Unit] =
+  private def validateCCExp(exp: String): F[Unit] =
     for {
       expiration <- parseExp(exp)
-      current    <- EitherT.liftF[F, CheckoutError, YearMonth](Async[F].delay(YearMonth.now()))
-      isValid <- EitherT.liftF[F, CheckoutError, Boolean](
-        Async[F].delay(expiration.isAfter(current))
-      )
-      resp <-
+      current    <- Async[F].delay(YearMonth.now())
+      isValid    <- Async[F].delay(expiration.isAfter(current))
+      _ <-
         if (isValid)
-          EitherT.rightT[F, CheckoutError](())
+          F.unit
         else
-          EitherT.leftT[F, Unit](CheckoutError("Credit Card expired"))
-    } yield resp
+          F.raiseError(CheckoutError("Credit card expired"))
+    } yield ()
 
-  private def parseExp(exp: String): EitherT[F, CheckoutError, YearMonth] = EitherT(
-    Async[F].delay(YearMonth.parse(exp, dtf)).attempt
-  ).leftSemiflatMap(_ => CheckoutError("Expiration value invalid").pure[F])
+  private def parseExp(exp: String): F[YearMonth] = F
+    .delay(YearMonth.parse(exp, dtf))
+    .handleErrorWith(_ => F.raiseError(CheckoutError("Invalid expiration value")))
 
   def endpoints: HttpRoutes[F] = checkout
 
