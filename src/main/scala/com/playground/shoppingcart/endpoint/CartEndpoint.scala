@@ -33,11 +33,14 @@ import org.http4s.dsl.io._
 import org.http4s.dsl.request
 import org.http4s.headers.Authorization
 import org.http4s.implicits._
+import com.playground.shoppingcart.domain.validation.CheckoutError
 
-class CartEndpoint[F[_]: Async](
+class CartEndpoint[F[_]](
   cartService: CartService[F],
   itemService: ItemService[F],
   authValidation: AuthValidation[F],
+)(
+  implicit F: Async[F]
 ) extends Http4sDsl[F] {
 
   def getUserCart: HttpRoutes[F] = HttpRoutes.of[F] { case request @ GET -> Root =>
@@ -50,22 +53,22 @@ class CartEndpoint[F[_]: Async](
 
   def addToCart: HttpRoutes[F] = HttpRoutes.of[F] { case request @ POST -> Root =>
     authValidation.asAuthUser { authRequest =>
-      val action =
+      val addItem =
         for {
-          newItem <- EitherT.liftF[F, CartUpdateError, NewCartItem](request.as[NewCartItem])
+          newItem <- request.as[NewCartItem]
           _       <- validateQuantity(newItem)
-          item <- EitherT.fromOptionF[F, CartUpdateError, Item](
-            itemService.getItemById(newItem.itemId),
-            CartUpdateError("Invalid item id"),
-          )
-          user = authRequest.authUser
-          _ <- EitherT(cartService.addToCart(user.id, CartItem(item, newItem.quantity)))
+          item    <- getItem(newItem.itemId)
+          _       <- addItemToCart(authRequest.authUser.id, CartItem(item, newItem.quantity))
         } yield ()
 
-      action.value.flatMap {
-        case Left(updateFailedError) => BadRequest(updateFailedError.msg)
-        case Right(_)                => Created()
-      }
+      addItem
+        .flatMap(_ => Created())
+        .handleErrorWith {
+          case CartUpdateError(msg) => BadRequest(msg)
+          case _: MessageFailure    => BadRequest()
+          case _                    => InternalServerError()
+        }
+
     }(request)
   }
 
@@ -76,16 +79,18 @@ class CartEndpoint[F[_]: Async](
           updateCartReq <- request.as[UpdateCartItems]
           validatedCartItems = updateCartReq.items.map(asValidCartItem).toList
           items <- validatedCartItems.sequence
-        } yield items.sequence
+        } yield items
 
-      cartItems.flatMap {
-        case Left(updateError) => BadRequest(updateError.msg)
-        case Right(items) =>
-          cartService.updateCartItems(
-            authRequest.authUser.id,
-            items,
-          ) >> NoContent()
-      }
+      cartItems
+        .flatMap { items =>
+          cartService.updateCartItems(authRequest.authUser.id, items) >> NoContent()
+        }
+        .handleErrorWith {
+          case CartUpdateError(msg) => BadRequest(msg)
+          case _: MessageFailure    => BadRequest()
+          case _                    => InternalServerError()
+        }
+
     }(request)
   }
 
@@ -97,36 +102,31 @@ class CartEndpoint[F[_]: Async](
       }(request)
   }
 
-  private def asValidCartItem: NewCartItem => F[Either[CartUpdateError, CartItem]] =
-    newCartItem =>
-      if (newCartItem.quantity <= 0)
-        Either
-          .left[CartUpdateError, CartItem](
-            CartUpdateError("Invalid quantity: " + newCartItem.quantity.toString())
-          )
-          .pure[F]
-      else
-        toCartItem(newCartItem.itemId).flatMap {
-          case Left(err) => Either.left[CartUpdateError, CartItem](err).pure[F]
-          case Right(item) =>
-            Either.right[CartUpdateError, CartItem](CartItem(item, newCartItem.quantity)).pure[F]
-        }
+  private def addItemToCart(
+    userId: Int,
+    cartItem: CartItem,
+  ): F[Unit] = cartService.addToCart(userId, cartItem).flatMap {
+    case Left(error) => F.raiseError(error)
+    case Right(_)    => F.unit
+  }
 
-  private def toCartItem: Int => F[Either[CartUpdateError, Item]] =
-    itemId =>
-      itemService.getItemById(itemId).flatMap {
-        case None =>
-          Either
-            .left[CartUpdateError, Item](CartUpdateError("Invalid item id: " + itemId.toString()))
-            .pure[F]
-        case Some(item) => Either.right[CartUpdateError, Item](item).pure[F]
-      }
+  private def asValidCartItem(newCartItem: NewCartItem): F[CartItem] =
+    for {
+      _        <- validateQuantity(newCartItem)
+      item     <- getItem(newCartItem.itemId)
+      cartItem <- CartItem(item, newCartItem.quantity).pure[F]
+    } yield cartItem
 
-  private def validateQuantity(item: NewCartItem): EitherT[F, CartUpdateError, Unit] =
+  private def getItem(itemId: Int): F[Item] = itemService.getItemById(itemId).flatMap {
+    case None       => F.raiseError(CartUpdateError("Invalid item id"))
+    case Some(item) => F.pure(item)
+  }
+
+  private def validateQuantity(item: NewCartItem): F[Unit] =
     if (item.quantity <= 0)
-      EitherT.left[Unit](CartUpdateError("Invalid quantity").pure[F])
+      F.raiseError(CartUpdateError("Invalid quantity: " + item.quantity.toString()))
     else
-      EitherT.right[CartUpdateError](().pure[F])
+      F.unit
 
   private def endpoints: HttpRoutes[F] = getUserCart <+> addToCart <+> deleteFromCart <+> updateCart
 

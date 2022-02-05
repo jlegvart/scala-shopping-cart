@@ -64,6 +64,7 @@ class OrderEndpoint[F[_]](
         }
         .handleErrorWith {
           case CheckoutError(msg) => BadRequest(msg)
+          case _: MessageFailure  => BadRequest()
           case _                  => InternalServerError("Error during checkout operation")
         }
     }(request)

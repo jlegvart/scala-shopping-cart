@@ -51,9 +51,12 @@ class AuthEndpoint[F[_]](
       .flatMap(buildJWT)
       .flatMap(Ok(_))
       .handleErrorWith {
-        case UserAuthenticationError(_) => BadRequest("Invalid username or password")
-        case _: MessageFailure          => BadRequest()
-        case _                          => InternalServerError()
+        case UserAuthenticationError(_) =>
+          F.pure(
+            Response(status = Status.Unauthorized).withEntity("Invalid username or password")
+          )
+        case _: MessageFailure => BadRequest()
+        case _                 => InternalServerError()
       }
   }
 
